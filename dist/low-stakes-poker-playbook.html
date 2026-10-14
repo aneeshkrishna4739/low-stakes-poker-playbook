@@ -365,6 +365,11 @@ table.days td,table.days th{white-space:nowrap}
 .hd-read{font-size:12.5px;color:var(--muted)}
 .mw-sub{display:grid;gap:4px;padding:0 0 6px}
 .mw-h{font-weight:700;font-size:13.5px;padding:10px 16px 0}
+
+.online-banner{background:var(--surface);border:1px solid var(--green-ink);border-radius:10px;padding:12px 14px;display:grid;gap:8px;justify-items:start;font-size:14px}
+.online-banner p{margin:0}
+.online-banner p:empty{display:none}
+a.btn{text-decoration:none;display:inline-block}
 </style>
 </head>
 <body>
@@ -3428,7 +3433,7 @@ function totals() {
 function savedText() {
   if (store.kind === "loading") return "Opening your practice history…";
   if (store.kind === "cloud") return "Every hand is saved to your Claude account, private to you.";
-  if (store.kind === "local") return "Every hand is saved in this browser. Export from History to keep a copy.";
+  if (store.kind === "local") return "Saved in this browser only.";
   return "This browser blocks storage, so hands are kept only until you close the page. Export from History to keep them.";
 }
 function head() {
@@ -3442,7 +3447,16 @@ function head() {
       return '<button data-view="' + v[0] + '" aria-pressed="' + (view === v[0]) + '">' + v[1] + "</button>";
     }).join("") + "</div>" +
     '<div class="pr-meta"><span class="pr-stats">' + stats + '</span><span class="pr-saved' + (store.error ? " warn" : "") + '">' + esc(store.error || savedText()) + "</span></div>" +
+    (store.kind === "local" && !window.claude ? onlineBanner() : "") +
   "</div>";
+}
+
+// The local file can't reach your Claude account, so it points to the online version, where every hand is saved there.
+var ONLINE_URL = "https://claude.ai/artifact/89kfAdCx2AgpWvZ67kxTfB";
+function onlineBanner() {
+  return '<div class="online-banner"><p><b>Save your practice to your Claude account:</b> practice in the online version instead. It saves every hand to your account, so it follows you to any device and Claude can analyze it.</p>' +
+    '<p>' + (store.records.length ? "To move the " + plural(store.records.length, "hand", "hands") + " saved here: History › Export JSON, then in the online version History › Import." : "") + '</p>' +
+    '<a class="btn primary" href="' + ONLINE_URL + '" target="_blank" rel="noopener">Open the online version</a></div>';
 }
 
 /* ---------- Play ---------- */
