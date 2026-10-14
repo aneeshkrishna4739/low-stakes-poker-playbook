@@ -8,8 +8,9 @@
 
 var RANKS = "23456789TJQKA";
 var SUITS = "♠♥♦♣";
-var RANK_NAME = ["two","three","four","five","six","seven","eight","nine","ten","jack","queen","king","ace"];
-var RANK_PLURAL = ["twos","threes","fours","fives","sixes","sevens","eights","nines","tens","jacks","queens","kings","aces"];
+// Number cards are written as digits, matching the cards on screen ("3 kicker", "Set of 7s"); picture cards as words.
+var RANK_NAME = ["2","3","4","5","6","7","8","9","10","jack","queen","king","ace"];
+var RANK_PLURAL = ["2s","3s","4s","5s","6s","7s","8s","9s","10s","jacks","queens","kings","aces"];
 var CATEGORY = ["High card","Pair","Two pair","Three of a kind","Straight","Flush","Full house","Four of a kind","Straight flush"];
 
 var counts = new Int8Array(13);
@@ -77,15 +78,15 @@ function handName(score, withKicker) {
   var cat = score >> 20, a = (score >> 16) & 15, b = (score >> 12) & 15, c = (score >> 8) & 15;
   if (withKicker && cat === 1) return "Pair of " + RANK_PLURAL[a] + ", " + RANK_NAME[b] + " kicker";
   if (withKicker && cat === 2) return "Two pair, " + RANK_PLURAL[a] + " and " + RANK_PLURAL[b] + ", " + RANK_NAME[c] + " kicker";
-  if (withKicker && cat === 3) return "Three " + RANK_PLURAL[a] + ", " + RANK_NAME[b] + " kicker";
+  if (withKicker && cat === 3) return "Three of a kind, " + RANK_PLURAL[a] + ", " + RANK_NAME[b] + " kicker";
   if (withKicker && cat === 0) return cap(RANK_NAME[a]) + " high, then " + RANK_NAME[b];
   switch (cat) {
     case 8: return a === 12 ? "Royal flush" : "Straight flush, " + RANK_NAME[a] + " high";
-    case 7: return "Four " + RANK_PLURAL[a];
-    case 6: return cap(RANK_PLURAL[a]) + " full of " + RANK_PLURAL[b];
+    case 7: return "Four of a kind, " + RANK_PLURAL[a];
+    case 6: return "Full house, " + RANK_PLURAL[a] + " full of " + RANK_PLURAL[b];
     case 5: return "Flush, " + RANK_NAME[a] + " high";
     case 4: return "Straight, " + RANK_NAME[a] + " high";
-    case 3: return "Three " + RANK_PLURAL[a];
+    case 3: return "Three of a kind, " + RANK_PLURAL[a];
     case 2: return "Two pair, " + RANK_PLURAL[a] + " and " + RANK_PLURAL[b];
     case 1: return "Pair of " + RANK_PLURAL[a];
     default: return cap(RANK_NAME[a]) + " high";

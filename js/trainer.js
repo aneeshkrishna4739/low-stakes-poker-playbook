@@ -86,7 +86,8 @@ function deal() {
 }
 function choose(id) {
   if (!st || !st.prompt || fb) return;
-  snap = { board: st.board.slice(), logLen: st.log.length, pot: PB.potOf(st), stack: PB.stackOf(st, "hero") };
+  snap = { board: st.board.slice(), logLen: st.log.length, pot: PB.potOf(st), stack: PB.stackOf(st, "hero"),
+    folded: (st.opps || []).filter(function (v) { return v.folded; }).map(function (v) { return v.seat; }) };
   var d = PB.choose(st, id);
   if (!d) return;
   if (st.done && !st.saved) { st.saved = true; store.add(PB.toRecord(st)); }
@@ -108,16 +109,23 @@ function table() {
   var potNow = showing ? showing.pot : PB.potOf(st), stack = showing ? showing.stack : PB.stackOf(st, "hero");
   var boardHTML = "";
   for (var i = 0; i < 5; i++) boardHTML += i < board.length ? card(board[i]) : slot();
-  var revealed = st.done && !fb && st.showdown;
-  var villainCards = st.villainSeat ? (revealed ? card(st.villain[0], true) + card(st.villain[1], true) : back(true) + back(true)) : "";
-  var who = st.players + "-handed · <b>You: " + esc(st.heroSeat) + "</b>" + (st.villainSeat ? " · Villain: " + esc(st.villainSeat) + " (" + esc(st.villainName) + ")" : "");
+  var revealed = st.done && !fb && st.showdown, opps = st.opps || [];
+  var shown = {};
+  if (revealed && st.showdown.all) st.showdown.all.forEach(function (x) { shown[x.seat] = x.hand; });
+  var who = st.players + "-handed · <b>You: " + esc(st.heroSeat) + "</b>" +
+    (opps.length === 1 ? " · Villain: " + esc(opps[0].seat) + " (" + esc(opps[0].name) + ")" : opps.length ? " · " + opps.length + " opponents" : "");
+  var villains = opps.map(function (v) {
+    var folded = showing ? showing.folded.indexOf(v.seat) >= 0 : v.folded;
+    var open = revealed && shown[v.seat] !== undefined;
+    var cardsHTML = open ? card(v.cards[0]) + card(v.cards[1]) : back() + back();
+    return '<div class="opp' + (folded ? " folded" : "") + '"><span class="k">' + esc(v.seat) + " · " + esc(v.name) + (folded ? " · folded" : open ? " · " + esc(shown[v.seat]) : "") +
+      '</span><div class="cards">' + cardsHTML + "</div></div>";
+  }).join("");
   return '<div class="felt">' +
     '<div class="felt-top"><span>' + who + "</span><span>Pot <b>" + PB.bbText(potNow) + "</b> · Your stack <b>" + PB.bbText(stack) + "</b></span></div>" +
+    (villains ? '<div class="opps">' + villains + "</div>" : "") +
     '<div class="board" aria-label="Board">' + boardHTML + "</div>" +
-    '<div class="hands">' +
-      '<div class="hand"><span class="k">Your hand</span><div class="cards">' + card(st.hero[0], true) + card(st.hero[1], true) + "</div></div>" +
-      (villainCards ? '<div class="hand right"><span class="k">Villain' + (revealed ? " · " + esc(st.showdown.villain) : "") + '</span><div class="cards">' + villainCards + "</div></div>" : "") +
-    "</div>" +
+    '<div class="hands"><div class="hand"><span class="k">Your hand</span><div class="cards">' + card(st.hero[0], true) + card(st.hero[1], true) + "</div></div></div>" +
   "</div>";
 }
 function actionLog() {
@@ -146,21 +154,45 @@ function feedback() {
       "<div><dt>Your hand</dt><dd>" + cardsInText(d.handText) + "</dd></div>" +
       (d.path ? '<div><dt>Guide entry</dt><dd><span class="path">' + esc(d.path) + "</span><br>" + cardsInText(d.guide) + "</dd></div>" : "<div><dt>Guide</dt><dd>" + cardsInText(d.guide) + "</dd></div>") +
       (d.why ? "<div><dt>Why</dt><dd>" + esc(d.why) + "</dd></div>" : "") +
-    "</dl>" +
+    "</dl>" + rangePanel(d) +
     '<div class="fb-actions"><button class="btn primary" data-act="continue">' + (st.done ? "See the result" : "Continue") + "</button></div>" +
   "</div>";
 }
+// What each opponent can hold, from his preflop action and everything he did since (reads.js).
+function rangePanel(d) {
+  var r = d.read;
+  if (!r) return "";
+  var opps = r.opps.map(function (o) {
+    var rows = o.groups.map(function (g) {
+      return '<div class="rr-row"><span>' + esc(g.label) + "</span>" + meter(g.share) + '<span class="rr-pct">' + Math.round(g.share * 100) + "%</span></div>";
+    }).join("");
+    return '<div class="rr-opp"><div class="rr-who"><span><b>' + esc(o.seat) + "</b> · " + esc(o.name) + '</span><span class="rr-beat">You beat <b>' + Math.round(o.ahead * 100) + "%</b> of it now</span></div>" +
+      '<p class="rr-line"><span class="k">Preflop</span> ' + esc(o.range) + " (" + o.rangePct + "% of hands)</p>" +
+      '<p class="rr-line"><span class="k">Since then</span> ' + esc(o.actions.length ? o.actions.join(" · ") : "No action yet after the flop") + "</p>" +
+      '<div class="rr-rows">' + rows + "</div></div>";
+  }).join("");
+  var nums = r.needed != null
+    ? "Equity <b>" + Math.round(r.equity * 100) + "%</b> · needed to call <b>" + Math.round(r.needed * 100) + "%</b>"
+    : "Equity <b>" + Math.round(r.equity * 100) + "%</b>" + (r.bet ? " · a " + Math.round(r.bet.frac * 100) + "% bet: " + (r.opps.length > 1 ? "everyone folds " : "he folds ") + "<b>" + Math.round(r.bet.allFold * 100) + "%</b>, worse calls <b>" + Math.round(r.bet.worse * 100) + "%</b>, better continues <b>" + Math.round(r.bet.better * 100) + "%</b>" : "");
+  return '<section class="rr"><div class="rr-head"><span class="k">' + (r.opps.length > 1 ? "Opponents' ranges" : "Opponent's range") + "</span></div>" + opps +
+    '<p class="rr-nums">' + nums + "</p>" +
+    '<p class="rr-insight"><b>Range read:</b> ' + esc(r.insight) + "</p>" +
+    (d.rangeBacked ? '<p class="rr-note">The guide plays it differently, but the range read backs your play, so it counts as Almost instead of a mistake.</p>' : "") +
+  "</section>";
+}
+
 function summary() {
   var r = st.result, counts = { correct: 0, almost: 0, mistake: 0 };
   st.decisions.forEach(function (d) { counts[d.verdict]++; });
   var list = st.decisions.map(function (d) {
-    return '<li><span class="chip c-' + d.verdict + '">' + VERDICT[d.verdict] + "</span><span><b>" + cap(d.street) + "</b> · you: " + esc(d.choiceLabel) +
+    return '<li><span class="vchip c-' + d.verdict + '">' + VERDICT[d.verdict] + "</span><span><b>" + cap(d.street) + "</b> · you: " + esc(d.choiceLabel) +
       (d.verdict === "correct" && d.choice === d.best ? "" : " · guide: " + esc(d.bestLabel)) + "</span></li>";
   }).join("");
   return '<div class="summary">' +
     '<div class="sum-head"><span class="result ' + (r.net > 0 ? "win" : r.net < 0 ? "lose" : "") + '">' + esc(r.text.replace(/\.$/, "")) + "</span>" +
     '<span class="muted">' + counts.correct + " correct · " + counts.almost + " almost · " + plural(counts.mistake, "mistake", "mistakes") + "</span></div>" +
-    (st.showdown ? '<p class="muted">Villain showed ' + cardsInText(PB.cardsText(st.villain)) + " (" + esc(st.showdown.villain) + "). You had " + esc(st.showdown.hero) + ".</p>" : "") +
+    (st.showdown ? '<p class="muted">' + st.showdown.all.map(function (x) { return esc(x.seat) + " showed " + cardsInText(x.cards) + " (" + esc(x.hand) + ")"; }).join(". ") + ". You had " + esc(st.showdown.hero) + ".</p>" : "") +
+    (!st.showdown && st.opps.length ? '<p class="muted">' + st.opps.map(function (v) { return esc(v.seat) + " had " + cardsInText(PB.cardsText(v.cards)); }).join(". ") + ".</p>" : "") +
     '<ol class="sum-list">' + list + "</ol>" +
     '<div class="ai" id="ai-box">' + aiBox(ai, "hand") + "</div>" +
     '<div class="fb-actions"><button class="btn primary" data-act="deal">Next hand</button></div>' +
@@ -176,21 +208,24 @@ function playView() {
 function verdictSummary(r) {
   var c = { correct: 0, almost: 0, mistake: 0 };
   (r.decisions || []).forEach(function (d) { c[d.verdict]++; });
-  if (!c.almost && !c.mistake) return '<span class="chip c-correct">All correct</span>';
-  return (c.mistake ? '<span class="chip c-mistake">' + plural(c.mistake, "mistake", "mistakes") + "</span>" : "") +
-    (c.almost ? '<span class="chip c-almost">' + c.almost + " almost</span>" : "");
+  if (!c.almost && !c.mistake) return '<span class="vchip c-correct">All correct</span>';
+  return (c.mistake ? '<span class="vchip c-mistake">' + plural(c.mistake, "mistake", "mistakes") + "</span>" : "") +
+    (c.almost ? '<span class="vchip c-almost">' + c.almost + " almost</span>" : "");
 }
 function handRow(r) {
   var dec = (r.decisions || []).map(function (d) {
     var same = d.verdict === "correct" && d.choice === d.best;
-    return '<li class="hd"><div class="hd-top"><span class="chip c-' + d.verdict + '">' + VERDICT[d.verdict] + "</span><b>" + cap(d.street) + "</b>" +
+    return '<li class="hd"><div class="hd-top"><span class="vchip c-' + d.verdict + '">' + VERDICT[d.verdict] + "</span><b>" + cap(d.street) + "</b>" +
       (d.board && d.street !== "preflop" ? " · " + cardsInText(d.board) : "") + "</div>" +
       '<p class="hd-sit">' + cardsInText(d.situation || "") + "</p>" +
       '<p class="hd-pick">You: <b>' + esc(d.choiceLabel || d.choice) + "</b>" + (same ? "" : " · Guide: <b>" + esc(d.bestLabel || d.best) + "</b>") + "</p>" +
       (d.bucket ? '<p class="hd-meta">' + esc(PB.BUCKET_LABEL[d.bucket === "bad" ? "bad:" + (d.sub || "air") : d.bucket] || "") + (d.path ? " · " + esc(d.path.split(" › ").slice(0, 3).join(" › ")) : "") + "</p>" : "") +
-      '<p class="hd-guide">' + cardsInText(d.guide || "") + "</p></li>";
+      '<p class="hd-guide">' + cardsInText(d.guide || "") + "</p>" +
+      (d.read ? '<p class="hd-read"><b>Range read:</b> ' + esc(d.read.insight) + (d.rangeBacked ? " (backed your play)" : "") + "</p>" : "") + "</li>";
   }).join("");
-  var villain = r.villainSeat ? "Villain: " + esc(r.villainSeat) + " (" + esc((PB.VILLAINS || {})[r.villainType] || r.villainType) + ")" + (r.villainHole ? " with " + cardsInText(r.villainHole) : "") + (r.showdown ? ". Showdown: you had " + esc(r.showdown.hero) + ", villain " + esc(r.showdown.villain) + "." : ".") : "Nobody called.";
+  var villain = r.villains && r.villains.length ? r.villains.map(function (v) {
+      return esc(v.seat) + " (" + esc((PB.VILLAINS || {})[v.type] || v.type) + ")" + (v.hole ? " had " + cardsInText(v.hole) : "") + (v.folded ? ", folded" : "");
+    }).join(" · ") + (r.showdown ? ". Showdown: you had " + esc(r.showdown.hero) + "." : ".") : r.villainSeat ? "Villain: " + esc(r.villainSeat) + " (" + esc((PB.VILLAINS || {})[r.villainType] || r.villainType) + ")" + (r.villainHole ? " with " + cardsInText(r.villainHole) : "") + (r.showdown ? ". Showdown: you had " + esc(r.showdown.hero) + ", villain " + esc(r.showdown.villain) + "." : ".") : "Nobody called.";
   return '<li><details data-hand="' + esc(r.id) + '"' + (hist.open[r.id] ? " open" : "") + ">" +
     '<summary><span class="hs-when">' + esc(when(r.ts)) + '</span><span class="hs-seat">' + esc(r.players + "-max · " + r.seat) + '</span><span class="hs-cards">' + cardsInText(r.hole) + (r.board ? ' <span class="hs-board">' + cardsInText(r.board) + "</span>" : "") +
     '</span><span class="hs-net ' + (r.net > 0 ? "win" : r.net < 0 ? "lose" : "") + '">' + signed(r.net) + 'bb</span><span class="hs-v">' + verdictSummary(r) + "</span></summary>" +
@@ -343,14 +378,15 @@ function reviewPrompt() {
   L.push("A rule-based judge already graded each decision. Say whether you agree, and explain in plain language that a learning player understands.");
   L.push("");
   L.push("Write plain text: no markdown, no bold, no headings. For each decision write one line:");
-  L.push("<number>. <street>: <Agree or Disagree> - <one or two short sentences naming the hand's bucket and bet type, and why that play is right>.");
+  L.push("<number>. <street>: <Agree or Disagree> - <one or two short sentences naming the hand's bucket and bet type, what the opponent's range and betting suggest, and why that play is right>.");
   L.push("Then one last line that starts with \"Lesson:\" and gives the single most useful takeaway. Stay under 170 words.");
   L.push("");
   L.push("PLAYBOOK RULES");
   L.push(guideRules());
   L.push("");
   L.push("THE HAND");
-  L.push("Table: " + st.players + "-handed, 100bb stacks. You: " + st.heroSeat + " with " + PB.cardsText(st.hero) + ". Villain: " + (st.villainSeat || "nobody called") + ", profile: " + st.villainName + ".");
+  L.push("Table: " + st.players + "-handed, 100bb stacks. You: " + st.heroSeat + " with " + PB.cardsText(st.hero) + ".");
+  L.push("Opponents: " + (st.opps.length ? st.opps.map(function (v) { return v.seat + " (" + v.name + ", preflop range: " + v.priorText + "; held " + PB.cardsText(v.cards) + (v.folded ? ", folded" : "") + ")"; }).join("; ") : "nobody called") + ".");
   if (st.board.length) L.push("Final board: " + PB.cardsText(st.board) + ".");
   L.push("Action: " + st.log.map(function (l) { return l.text; }).join(" "));
   L.push("");
@@ -359,7 +395,10 @@ function reviewPrompt() {
     L.push(d.n + ". " + cap(d.street) + (d.board.length ? " (board " + PB.cardsText(d.board) + ")" : "") + ". " + d.situation);
     L.push("   Options: " + d.options.join(", ") + ". You chose: " + d.choiceLabel + ". Judge: " + d.verdict + ". Guide's answer: " + d.bestLabel + (d.equalLabels && d.equalLabels.length ? " (or " + d.equalLabels.join(", ") + ")" : "") + ".");
     if (d.street === "preflop") L.push("   Hand: " + d.handText + ". Guide: " + d.guide);
-    else L.push("   Hand reading: " + d.handText + " Guide entry (" + d.path + "): " + d.guide + (d.why ? " Why: " + d.why : ""));
+    else {
+      L.push("   Hand reading: " + d.handText + " Guide entry (" + d.path + "): " + d.guide + (d.why ? " Why: " + d.why : ""));
+      if (d.read) L.push("   Range read (from each opponent's preflop range and his actions so far): " + d.read.insight + (d.rangeBacked ? " The judge upgraded this to almost because the range read backs it." : ""));
+    }
   });
   L.push("");
   L.push("RESULT: " + st.result.text + (st.showdown ? " Showdown: you had " + st.showdown.hero + "; villain had " + PB.cardsText(st.villain) + " (" + st.showdown.villain + ")." : ""));

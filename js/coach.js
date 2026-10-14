@@ -80,9 +80,11 @@ var OPEN_ORDER = ["vep", "ep", "hj", "co", "sb", "btn"]; // tightest to loosest 
    kind: pre-rfi | pre-vsopen | pre-vs3bet | pre-vs4bet | pre-vs5bet; raiseId: the option that means "raise" here. */
 function judgePre(o) {
   var spot = spotOf(o.mode, o.spotId), cat = catOf(spot, o.key, o.seat), labels = D.PRE[o.mode].labels;
-  var best = (cat === "v" || cat === "b") ? o.raiseId : cat === "c" ? "call" : "fold";
+  var squeezeBluff = o.callers > 0 && cat === "b"; // with a caller already in, the guide doesn't bluff-squeeze
+  var best = squeezeBluff ? "fold" : (cat === "v" || cat === "b") ? o.raiseId : cat === "c" ? "call" : "fold";
   var verdict;
   if (o.choice === best) verdict = "correct";
+  else if (squeezeBluff) verdict = o.choice === o.raiseId ? "almost" : "mistake";
   else if (o.kind === "pre-rfi") {
     var i = OPEN_ORDER.indexOf(o.spotId);
     var tighter = i > 0 ? spotOf("open", OPEN_ORDER[i - 1]) : null, looser = i < OPEN_ORDER.length - 1 ? spotOf("open", OPEN_ORDER[i + 1]) : null;
@@ -101,7 +103,8 @@ function judgePre(o) {
   else text = o.key + " is in the “" + labels[cat] + "” range" + (where ? " (" + where + ")" : "") + ".";
   if (cat === "f" && o.seat === "SB" && spot.sbCall !== undefined && rangeSet(spot.call).has(o.key)) text = o.key + " is a call from the BB, but from the SB the guide 3-bets or folds and flat-calls only " + spot.sbCall + ".";
   if (o.kind === "pre-vs4bet" && o.choice === "call") text += " At 100bb the guide never flat-calls a 4-bet: jam or fold.";
-  if (cat === "b" && o.choice === "fold") text += " Bluffs are optional, so folding is only a small leak.";
+  if (squeezeBluff) text += " But someone already called the open, so it's a squeeze: with two players to get through, skip the bluff and fold.";
+  else if (cat === "b" && o.choice === "fold") text += " Bluffs are optional, so folding is only a small leak.";
   return { verdict: verdict, best: best, cat: cat, text: text, note: spot.note || "", size: spot.size };
 }
 
@@ -273,8 +276,36 @@ function answerVsRaise(x) {
 
 /* postAnswer(ctx): ctx = {kind: "open"|"vsBet"|"vsRaise", street, role, pos, an, board, villainType,
    prevCheckedThrough, betFrac, villainBarrels, villainCheckedTurn} */
+/* Multiway pots (2+ opponents): the guide's MW section, the same whatever your role or position. */
+var TERM_TO_ID = { "Value bet": "bet:value", "Value bet, light protection": "bet:light", "Value + protection bet": "bet:vp", "Thin value bet": "bet:thin",
+  "Protection bet": "bet:prot", "Raise for value": "raise:value", "Value + protection raise": "raise:vp" };
+function answerMultiway(x) {
+  var s = x.street, an = x.an, node = D.MW[s][an.bucket], set = node;
+  if (an.bucket === "bad") {
+    var sub = an.sub;
+    if (s === "river" && !node[sub]) sub = "air";
+    if (s !== "river" && !node[sub]) sub = "air";
+    set = node[sub];
+  }
+  var key = x.kind === "open" ? "open" : x.kind === "vsBet" ? "vsBet" : "vsRaise", L = set[key];
+  var path = STREET_NAME[s] + " › Multiway, " + (x.opponents + 1) + " players › " + an.label;
+  var g = sent(L.act + (L.size ? " " + L.size : "") + " (" + L.term + ")") + (L.t ? " " + sent(L.t) : ""), why = node.why;
+  if (key === "open") {
+    if (L.act === "Bet") return ans(TERM_TO_ID[L.term] || "bet:value", [], [], g, path, why);
+    return ans("check", set.alt ? [set.alt] : [], [], g, path, why);
+  }
+  if (L.act === "Raise") return ans(TERM_TO_ID[L.term] || "raise:value", [], ["call"], g, path, why);
+  if (L.act === "Re-raise all-in") return ans("jam", [], ["call"], g, path, why);
+  if (L.act === "Call") {
+    var lim = sizeLimit(L.size), pct = Math.round(x.betFrac * 100);
+    if (lim !== null && pct > lim + 2) return ans("fold", [], ["call"], g + " The bet is " + pct + "% of the pot and the guide calls only up to " + lim + "%.", path, why);
+    return ans("call", [], [], g, path, why);
+  }
+  return ans("fold", [], [], g, path, why);
+}
+
 function postAnswer(x) {
-  var a = x.kind === "open" ? answerOpen(x) : x.kind === "vsBet" ? answerVsBet(x) : answerVsRaise(x);
+  var a = x.opponents >= 2 ? answerMultiway(x) : x.kind === "open" ? answerOpen(x) : x.kind === "vsBet" ? answerVsBet(x) : answerVsRaise(x);
   if (x.canRaise === false) { // someone is all-in: a raise is not possible, so the guide's raise becomes a call
     var isRaise = function (id) { return id === "jam" || id.indexOf("raise:") === 0; };
     if (isRaise(a.best)) a = ans("call", [], [], a.guide + " Raising isn't possible here because a player is all-in, so call.", a.path, a.why);

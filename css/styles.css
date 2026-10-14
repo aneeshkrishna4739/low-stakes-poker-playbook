@@ -237,9 +237,9 @@ table.terms td.strong{font-weight:700;white-space:nowrap}
 .fb,.summary{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:12px}
 .fb-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .verdict{font-family:var(--f-display);font-weight:800;text-transform:uppercase;letter-spacing:.03em;font-size:21px;line-height:1;padding:7px 11px 6px;border-radius:5px}
-.v-correct .verdict,.chip.c-correct{background:var(--good-bg);color:var(--good-ink)}
-.v-almost .verdict,.chip.c-almost{background:var(--amber);color:var(--b-ink)}
-.v-mistake .verdict,.chip.c-mistake{background:var(--suit);color:var(--v-ink)}
+.v-correct .verdict,.vchip.c-correct{background:var(--good-bg);color:var(--good-ink)}
+.v-almost .verdict,.vchip.c-almost{background:var(--amber);color:var(--b-ink)}
+.v-mistake .verdict,.vchip.c-mistake{background:var(--suit);color:var(--v-ink)}
 .fb-street{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .fb-rows{margin:0;display:grid}
 .fb-rows div{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:8px 0;border-top:1px dashed var(--line)}
@@ -253,8 +253,8 @@ table.terms td.strong{font-weight:700;white-space:nowrap}
 .result.win{color:var(--green-ink)} .result.lose{color:var(--suit)}
 .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
 .sum-list li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:baseline}
-.sum-list .chip{justify-self:start}
-.chip{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.sum-list .vchip{justify-self:start}
+.vchip{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
 .ai{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px}
 .ai-out{white-space:pre-wrap;font-size:14px;line-height:1.55;background:var(--sunk);border-radius:8px;padding:12px}
 .ai-note{font-size:13px;color:var(--muted)}
@@ -332,3 +332,26 @@ table.days td,table.days th{white-space:nowrap}
 .every .tablewrap{margin-top:8px}
 .ai-h{display:block;font-weight:700;margin-top:6px;letter-spacing:.02em}
 .improve h3,.sw-col h3,.pr-body section > h3{font-size:15px}
+
+/* Practice: several opponents, range reads; Postflop tree: multiway */
+.opps{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:center}
+.opp{display:grid;gap:4px;justify-items:center;text-align:center}
+.opp .k{color:var(--on-felt-muted);font-size:10.5px}
+.opp.folded .cards{opacity:.35}
+.rr{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:10px}
+.rr-opp{background:var(--sunk);border-radius:8px;padding:10px 12px;display:grid;gap:6px;font-size:13.5px}
+.rr-who{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;align-items:baseline}
+.rr-beat{font-size:13px;color:var(--muted)}
+.rr-beat b{color:var(--ink)}
+.rr-line{margin:0}
+.rr-line .k{margin-right:6px}
+.rr-rows{display:grid;gap:3px}
+.rr-row{display:grid;grid-template-columns:minmax(0,1fr) 72px 38px;gap:8px;align-items:center;font-size:12.5px}
+.rr-row .meter{width:72px;margin-right:0}
+.rr-pct{font-family:var(--f-mono);font-size:12px;text-align:right;color:var(--muted)}
+.rr-nums{font-size:13.5px;margin:0}
+.rr-insight{font-size:14px;margin:0}
+.rr-note{font-size:13px;color:var(--green-ink);font-weight:600;margin:0}
+.hd-read{font-size:12.5px;color:var(--muted)}
+.mw-sub{display:grid;gap:4px;padding:0 0 6px}
+.mw-h{font-weight:700;font-size:13.5px;padding:10px 16px 0}

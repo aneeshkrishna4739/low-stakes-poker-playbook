@@ -11,6 +11,7 @@ const K = require(js("cards.js"));
 const E = require(js("engine.js"));
 require(js("ranges.js")); require(js("table.js")); require(js("data.js"));
 const C = require(js("coach.js"));
+require(js("villain.js")); require(js("reads.js"));
 const S = require(js("sim.js"));
 
 let problems = 0;
@@ -26,7 +27,10 @@ for (let i = 0; i + 1 < order.length; i++) {
   if (!(K.evaluate(P(order[i])) > K.evaluate(P(order[i + 1])))) fail(`evaluator order: ${order[i]} should beat ${order[i + 1]}`);
 }
 if (K.evaluate(P("AhAd9c7s2d4h3c")) <= K.evaluate(P("AhAd9c7s2d"))) fail("7-card hand should find the 5-high straight");
-if (K.handName(K.evaluate(P("KhKdKc7s7d"))) !== "Kings full of sevens") fail("hand name for a full house");
+if (K.handName(K.evaluate(P("KhKdKc7s7d"))) !== "Full house, kings full of 7s") fail("hand name for a full house");
+// Number cards are digits, so a kicker never reads like a hand ("3 kicker", not "three kicker").
+if (E.describe(E.made(P("As3s"), P("Qc2dAh")), P("As3s"), P("Qc2dAh")) !== "Top pair (aces), 3 kicker") fail("kicker name");
+if (K.handName(K.evaluate(P("2s2h2dKcQs"))) !== "Three of a kind, 2s") fail("three of a kind name");
 
 // 2. The guide's example hands
 const examples = [
@@ -50,7 +54,7 @@ console.log(`Guide examples checked: ${examples.length + 1}`);
 // 3 + 4. Simulated hands
 function play(seed, policy) {
   const rng = K.seededRandom(seed);
-  const st = S.newHand({ players: 5 + Math.floor(rng() * 7), rng });
+  const st = S.newHand({ players: 5 + Math.floor(rng() * 7), rng, reads: policy !== "guide" });
   let steps = 0;
   while (!st.done && steps++ < 30) {
     const p = st.prompt;
@@ -72,10 +76,14 @@ function play(seed, policy) {
   if (!st.done) fail(`seed ${seed}: hand did not finish`);
   else {
     const r = st.result;
-    if (!(r.net >= -100 && r.net <= 101.5)) fail(`seed ${seed}: impossible result ${r.net}bb`);
-    if (st.heroIn > 100 || st.villainIn > 100) fail(`seed ${seed}: put in more than the stack`);
+    if (!(r.net >= -100 && r.net <= 100 * Math.max(1, st.opps.length) + 1.5)) fail(`seed ${seed}: impossible result ${r.net}bb`);
+    if (st.heroIn > 100 || st.opps.some((v) => v.in > 100)) fail(`seed ${seed}: put in more than the stack`);
     if (st.board.length && st.board.length !== 3 && st.board.length !== 4 && st.board.length !== 5) fail(`seed ${seed}: board has ${st.board.length} cards`);
-    if (new Set(st.board.concat(st.hero, st.villain || [])).size !== st.board.length + 2 + (st.villain ? 2 : 0)) fail(`seed ${seed}: a card was dealt twice`);
+    const all = st.board.concat(st.hero, ...st.opps.map((v) => v.cards));
+    if (new Set(all).size !== all.length) fail(`seed ${seed}: a card was dealt twice`);
+    // Money: what you won plus what everyone else lost adds up to zero.
+    const pot = S.potOf(st), back = st.result.winner === "villain" ? 0 : st.result.net + st.heroIn;
+    if (back > pot + 0.01) fail(`seed ${seed}: won ${back}bb from a ${pot}bb pot`);
   }
   return st;
 }
@@ -87,7 +95,7 @@ for (let seed = 1; seed <= 1500; seed++) {
   const st = play(seed, "guide");
   for (const d of st.decisions) {
     decisions++;
-    const key = d.kind + (d.street !== "preflop" ? " " + d.street : "");
+    const key = d.kind + (d.street !== "preflop" ? " " + d.street : "") + (d.multiway ? " multiway" : "");
     coverage[key] = (coverage[key] || 0) + 1;
     if (d.bucket) coverage["bucket " + d.bucket.split(" · ").slice(0, 2).join(" · ")] = (coverage["bucket " + d.bucket.split(" · ").slice(0, 2).join(" · ")] || 0) + 1;
   }
@@ -103,7 +111,8 @@ console.log("Spots covered:");
 Object.keys(coverage).sort().forEach((k) => console.log(`  ${k.padEnd(48)} ${coverage[k]}`));
 console.log(`Time: ${ms} ms`);
 
-const mustCover = ["pre-rfi", "pre-vsopen", "pre-vs3bet", "pre-vs4bet", "pre-vs5bet", "open flop", "open turn", "open river", "vsBet flop", "vsBet turn", "vsBet river", "vsRaise flop"];
+const mustCover = ["pre-rfi", "pre-vsopen", "pre-vs3bet", "pre-vs4bet", "pre-vs5bet", "open flop", "open turn", "open river", "vsBet flop", "vsBet turn", "vsBet river", "vsRaise flop",
+  "open flop multiway", "open turn multiway", "open river multiway", "vsBet flop multiway", "vsBet turn multiway"];
 for (const k of mustCover) if (!coverage[k]) fail(`no practice hand reached "${k}"`);
 
 if (problems) { console.log(`${problems} problem(s) found`); process.exit(1); }

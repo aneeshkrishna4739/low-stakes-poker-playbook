@@ -81,5 +81,20 @@ console.log(`Tree spots: ${cells}/${expected} (${bucketIds.length} buckets)`);
 if (cells !== expected) fail("Tree is incomplete");
 for (const b of data.BUCKETS) if (!b.play) fail(`NO BET TYPE for bucket ${b.id}`);
 
+// 4. Multiway guide: every street and bucket has an answer for betting first, facing a bet and facing a raise
+let mw = 0;
+for (const street of ["flop", "turn", "river"]) {
+  for (const b of bucketIds) {
+    const node = data.MW[street] && data.MW[street][b];
+    if (!node) { fail(`MISSING MULTIWAY ${street}/${b}`); continue; }
+    const sets = b === "bad" ? (street === "river" ? ["missed", "weak", "air"] : ["strong", "draw", "weak", "air"]).map((k) => node[k]) : [node];
+    sets.forEach((set, i) => ["open", "vsBet", "vsRaise"].forEach((k) => {
+      if (!set || !set[k] || !set[k].act || !set[k].term) fail(`MULTIWAY ${street}/${b}/${i}/${k} incomplete`); else mw++;
+    }));
+    if (!node.why) fail(`MULTIWAY ${street}/${b} has no reason`);
+  }
+}
+console.log(`Multiway answers: ${mw}`);
+
 if (problems) { console.log(`${problems} problem(s) found`); process.exit(1); }
 console.log("All checks passed");

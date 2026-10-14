@@ -18,7 +18,7 @@ The owner is learning poker. The page is a study and at-the-table reference, so 
 - Plain HTML, CSS and JavaScript. No framework, bundler, package.json or dependencies. Don't add any.
 - `index.html` must work by double-clicking it (file://). So no ES modules (`type="module"`), no `fetch()` of local files, no build step required to view.
 - Each script is wrapped in an IIFE that attaches its exports to `window.PB` and also sets `module.exports`, so Node tests can `require` the same files. Keep that pattern for any new script.
-- Load order in `index.html` matters: `ranges.js` → `table.js` → `data.js` → `cards.js` → `engine.js` → `coach.js` → `sim.js` → `store.js` → `retro.js` → `app.js` → `trainer.js`.
+- Load order in `index.html` matters: `ranges.js` → `table.js` → `data.js` → `cards.js` → `engine.js` → `coach.js` → `villain.js` → `reads.js` → `sim.js` → `store.js` → `retro.js` → `app.js` → `trainer.js`.
 - The only network request is Google Fonts, with system-font fallbacks. Keep it that way.
 
 ## Where things live
@@ -31,7 +31,9 @@ The owner is learning poker. The page is a study and at-the-table reference, so 
 | `js/cards.js` | Cards as integers 0–51 and the hand evaluator (higher score = better hand). |
 | `js/engine.js` | Hand reading: made hand, share of hands that beat you, bad next cards, bucket and bad-hand type. |
 | `js/coach.js` | The judge: the guide's answer for a spot (from `PRE` and `T`), decision options, and the verdict. |
-| `js/sim.js` | Practice hands: scenario dealing, the opponent model, pot and stacks. No DOM, so it runs in Node. |
+| `js/villain.js` | The opponent model as probabilities: `villainPolicy(class, situation)` and `betSizes`. Profiles: nit, typ, agg, loose (calling station). |
+| `js/reads.js` | Range reads: re-weights each opponent's preflop range by `villainPolicy` for every action he took, then equity, fold and call odds. |
+| `js/sim.js` | Practice hands: scenario dealing, one to three opponents, multiway betting rounds, pot and stacks. No DOM, so it runs in Node. |
 | `js/app.js` | Rendering and state for the chart and tree tabs. No strategy content here. |
 | `js/store.js` | The practice database: the artifact `db` store online, `localStorage` locally, memory as a last resort. |
 | `js/retro.js` | Retrospect: areas, strengths, weaknesses, leak patterns, trend, and the prompt for Claude's coaching report. Pure functions. |
@@ -39,6 +41,7 @@ The owner is learning poker. The page is a study and at-the-table reference, so 
 | `css/styles.css` | Styles and light/dark theme tokens. |
 | `tests/check-data.js` | Validates ranges, seats and tree completeness. |
 | `tests/check-practice.js` | Evaluator, the guide's example hands, and thousands of simulated practice hands. |
+| `tests/check-reads.js` | Range reads against the opponents' real hands: the real hand is never ruled out, and ahead-of-range and hand-class predictions are calibrated. |
 | `tests/check-retro.js` | Records, Retrospect on simulated players with known habits, and both stores (the cloud one against a stand-in for the platform db). |
 | `tests/screenshots.py` | Phone-width screenshots of each tab; prints page width per tab. |
 | `tools/build_single_file.py` | Inlines everything into `dist/low-stakes-poker-playbook.html`. |
@@ -80,6 +83,14 @@ Every spot needs a bet type and a reason. Bet-type names should come from `TERMS
 - Good: top pair, an overpair or better, and at most 30% of hands beat you; or any pair that at most 12% of hands beat (JJ on A-A-5).
 - Bad: everything else, split into strong draw (12+ cards make it good), draw (8–11), weak showdown (any pair, or ace high) and air; on the river, missed draw.
 - Bad next cards: the most next-card outs that any hand currently behind you has. That count picks the vulnerability bucket. On the river, Nutted is always non-vulnerable, and Good is very vulnerable only if the river was a scare card.
+
+**Opponents (`villain.js`, `sim.js`).** Each opponent is dealt from the chart range his preflop action implies (opening, calling, 3-bet; calling stations call with `LOOSE_EXTRA` too), so his range is known exactly. Postflop he plays by `villainPolicy` on his `quickClass` (engine.js: a fast version of the buckets, about 98% in line with the exact reading). Bet sizes are drawn from `betSizes`, so size carries information. Multiway pots come from opens with callers, a cold-caller before the hero (a squeeze spot), and blinds overcalling.
+
+**Range reads (`reads.js`)** run the opponent model backwards: weight(hand) = product over his actions of `actionProb(class of hand on that board, situation, action, size)`. Change `villainPolicy` or `betSizes` and the reads follow automatically. `tests/check-reads.js` must keep the real hand possible and the predictions calibrated. A play the read clearly supports (equity vs pot odds, fold equity vs break-even, worse hands calling) is upgraded from mistake to almost, never further; the guide stays the standard.
+
+**Multiway guide (`MW` in data.js).** `MW[street][bucket] = {open, vsBet, vsRaise, why}` (the bad bucket has one set per hand type). The judge uses it whenever 2+ opponents are in the hand, whatever the hero's role or position. The Postflop tree shows it under "Players in the pot › Multiway".
+
+**Hand names** write number cards as digits and picture cards as words ("Top pair (aces), 3 kicker", "Three of a kind, 2s", "Set of 7s"), so a kicker never reads like a hand. Keep that in any new text.
 
 **The judge (`coach.js`)** never hard-codes advice. Preflop answers come from the range charts; postflop answers are read from the tree node for the hand's bucket and situation, its rows ("If they check", "If raised" …) and its size limits ("bets ≤ 66%"). If you change the tree's wording, keep the action words the judge reads: `Bet`, `Check`, `Raise`, `Call`, `Fold`, `Check-raise`, `Check-call`, `Check-fold`, `Lead`, `Call or raise`, `Check-raise or call`, the `≤ N%` size limits, and the row labels.
 

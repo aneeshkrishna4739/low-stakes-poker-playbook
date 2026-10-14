@@ -49,6 +49,8 @@ var AREAS = [
   { id: "open", group: "Postflop", label: "Betting first or checked to", test: function (d) { return d.kind === "open"; } },
   { id: "vsBet", group: "Postflop", label: "Facing a bet", test: function (d) { return d.kind === "vsBet"; } },
   { id: "vsRaise", group: "Postflop", label: "Facing a raise", test: function (d) { return d.kind === "vsRaise"; } },
+  { id: "pot-hu", group: "Pot", label: "Heads-up pots", test: function (d) { return !isPre(d) && !d.multiway; } },
+  { id: "pot-mw", group: "Pot", label: "Multiway pots (3+ players)", test: function (d) { return !!d.multiway; } },
   { id: "flop", group: "Street", label: "Flop", test: function (d) { return d.street === "flop"; } },
   { id: "turn", group: "Street", label: "Turn", test: function (d) { return d.street === "turn"; } },
   { id: "river", group: "Street", label: "River", test: function (d) { return d.street === "river"; } },

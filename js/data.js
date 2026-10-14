@@ -255,10 +255,57 @@ var T = {
  }
 };
 
+/* ---------- multiway pots (3+ players see the flop) ----------
+   The same rules whatever your role or position: bet only good hands and bigger, and almost never bluff.
+   MW[street][bucket] = { open, vsBet, vsRaise, why }; the bad bucket has one set per hand type.
+   Each entry: { act, k (color), size, term (bet type), t (note) }. coach.js reads act, size limits ("bets ≤ N%") and term. */
+function M(act, k, size, term, t) { return { act: act, k: k, size: size, term: term, t: t || "" }; }
+function mwStreet(street) {
+  var river = street === "river", turn = street === "turn";
+  var jam = M("Re-raise all-in", "bet", "", "All-in for value", "Against a raise in a multiway pot, get it in with the nuts.");
+  var nut = function (size, term, rsize, rterm) {
+    return { open: M("Bet", "bet", size, term, "Several players can pay you: build the pot."), vsBet: M("Raise", "bet", rsize, rterm, "Raise: callers behind add even more money."), vsRaise: jam,
+      why: "More opponents means more hands that can call a value bet." };
+  };
+  var out = {
+    nnv: nut(river ? "75–100% pot" : "66–75% pot", "Value bet", river ? "2.5–3× their bet" : "3× their bet", "Raise for value"),
+    nsv: nut(river ? "75–100% pot" : "66–75% pot", river ? "Value bet" : "Value bet, light protection", river ? "2.5–3× their bet" : "3× their bet", "Raise for value"),
+    nvv: nut(river ? "75–100% pot" : "75–100% pot", river ? "Value bet" : "Value + protection bet", river ? "2.5–3× their bet" : "3.5× their bet", river ? "Raise for value" : "Value + protection raise"),
+    gsv: { open: river ? M("Bet", "bet", "33–50% pot", "Thin value bet", "Bet small: several worse pairs may call one small bet.")
+                       : M("Bet", "bet", "66–75% pot", "Protection bet", "Size up: with several draws out, make them pay now."),
+           vsBet: M("Call", "call", "bets ≤ 50%", "Bluff catch", "Fold to bigger bets: in a multiway pot a big bet is rarely a bluff."),
+           vsRaise: M("Fold", "fold", "", "Give up", "A raise in a multiway pot is two pair or better."),
+           why: "One good pair is worth less against several players, so bet for protection and keep calls small." },
+    gvv: { open: river ? M("Check", "check", "", "Pot control", "The river completed a draw: several players means someone often has it.")
+                       : M("Bet", "bet", "66–75% pot", "Protection bet", "Charge every draw; don't give several players a free card."),
+           vsBet: M("Call", "call", "bets ≤ 33%", "Bluff catch", "Fold to anything bigger."),
+           vsRaise: M("Fold", "fold", "", "Give up", "Let it go."),
+           why: "Vulnerable hands lose value fast when several players are drawing." },
+    bad: river ? {
+      missed: { open: M("Check", "check", "", "Give up", "Never bluff into several players."), vsBet: M("Fold", "fold", "", "Give up"), vsRaise: M("Fold", "fold", "", "Give up") },
+      weak: { open: M("Check", "check", "", "Pot control", "Take the free showdown."), vsBet: M("Fold", "fold", "", "Give up", "A weak pair can't call a bet into several players."), vsRaise: M("Fold", "fold", "", "Give up") },
+      air: { open: M("Check", "check", "", "Give up", "Never bluff into several players."), vsBet: M("Fold", "fold", "", "Give up"), vsRaise: M("Fold", "fold", "", "Give up") },
+      why: "Someone usually has something in a multiway pot, so bluffs and weak calls lose."
+    } : {
+      strong: { open: M("Check", "check", "", "Free card, or semi-bluff", "A semi-bluff 66% is fine too: you have 12+ outs."), alt: "bet:semi",
+                vsBet: M("Call", "call", turn ? "bets ≤ 66%" : "bets ≤ 75%", "Drawing with odds", "Callers behind improve your price."),
+                vsRaise: turn ? M("Fold", "fold", "", "Give up", "One card to come isn't enough against a raise.") : M("Call", "call", "", "Drawing with odds", "Call with 12+ outs; fold weaker draws.") },
+      draw: { open: M("Check", "check", "", "Free card", "Take the free card; a bet rarely folds out several players."),
+              vsBet: M("Call", "call", turn ? "bets ≤ 33%" : "bets ≤ 50%", "Drawing with odds", "Fold to bigger bets."),
+              vsRaise: M("Fold", "fold", "", "Give up") },
+      weak: { open: M("Check", "check", "", "Pot control", "Keep the pot small."), vsBet: M("Fold", "fold", "", "Give up", "A weak pair can't call a bet into several players."), vsRaise: M("Fold", "fold", "", "Give up") },
+      air: { open: M("Check", "check", "", "Give up", "Never bluff three or more players."), vsBet: M("Fold", "fold", "", "Give up"), vsRaise: M("Fold", "fold", "", "Give up") },
+      why: "Almost no bluffs multiway: someone usually has a pair. Continue only with real draws at a good price."
+    }
+  };
+  return out;
+}
+var MW = { flop: mwStreet("flop"), turn: mwStreet("turn"), river: mwStreet("river") };
+
 /* ---------- rules ---------- */
 var ADJUST = [
   ["3-bet pots","Shrink sizes: flop 25–33% on dry boards, 50% on wet. The stack is only about 4× the pot, so Good · slightly vulnerable and better are happy to get all-in."],
-  ["Multiway (3+ players)","Bet only Good · very vulnerable or better, and size up to 66–75%. Almost no bluffs or semi-bluffs without a strong draw."],
+  ["Multiway (3+ players)","Bet only good hands and better, and size up to 66–75%. Almost no bluffs; continue with draws only at a good price. The Postflop tree has a Multiway view with every spot."],
   ["Full ring (8–11 players)","Early-seat ranges are much tighter and more pots go multiway. Give early opens more credit, bluff less after the flop, and use the multiway rule whenever 3+ players see the flop."],
   ["Short-handed (5 players)","Everyone opens wider. Defend and 3-bet a bit more, and c-bet more often heads-up."],
   ["Low stack-to-pot (under 3)","Overpairs and top pair, top kicker are committed. Value bet and jam instead of pot control."],
@@ -283,7 +330,7 @@ var OUTS = [
   ["Two overcards","6","13%","24%"]
 ];
 
-var api = { TIERS: TIERS, PRE: PRE, SIZES: SIZES, SIZE_NOTES: SIZE_NOTES, BUCKETS: BUCKETS, TERMS: TERMS, CTX: CTX, STREETNOTE: STREETNOTE, T: T, ADJUST: ADJUST, ODDS: ODDS, OUTS: OUTS };
+var api = { TIERS: TIERS, PRE: PRE, SIZES: SIZES, SIZE_NOTES: SIZE_NOTES, BUCKETS: BUCKETS, TERMS: TERMS, CTX: CTX, STREETNOTE: STREETNOTE, T: T, MW: MW, ADJUST: ADJUST, ODDS: ODDS, OUTS: OUTS };
 root.PB = Object.assign(root.PB || {}, api);
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

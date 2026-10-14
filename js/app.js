@@ -9,11 +9,11 @@ var TIERS = PB.TIERS, PRE = PB.PRE, SIZES = PB.SIZES, SIZE_NOTES = PB.SIZE_NOTES
 var CTX = PB.CTX, STREETNOTE = PB.STREETNOTE, T = PB.T, ADJUST = PB.ADJUST, ODDS = PB.ODDS, OUTS = PB.OUTS;
 
 /* ---------- state ---------- */
-var state = { tab:"preflop", pre:"open", players:6, openSeat:"BTN", opener:"BTN", hero:"BB", opened4:"BTN", spot5:"typ", street:"flop", role:"agg", pos:"ip", bucket:"gsv", hand:null };
+var state = { tab:"preflop", pre:"open", players:6, openSeat:"BTN", opener:"BTN", hero:"BB", opened4:"BTN", spot5:"typ", street:"flop", pot:"hu", role:"agg", pos:"ip", bucket:"gsv", hand:null };
 try {
   var saved = JSON.parse(localStorage.getItem("ls-playbook-v2") || "null");
   if (saved && typeof saved === "object") {
-    ["tab","pre","openSeat","opener","hero","opened4","spot5","street","role","pos","bucket"].forEach(function(k){ if (typeof saved[k] === "string") state[k] = saved[k]; });
+    ["tab","pre","openSeat","opener","hero","opened4","spot5","street","pot","role","pos","bucket"].forEach(function(k){ if (typeof saved[k] === "string") state[k] = saved[k]; });
     if (typeof saved.players === "number" && saved.players >= 5 && saved.players <= 11) state.players = saved.players;
   }
 } catch(e){}
@@ -150,6 +150,10 @@ preBody.addEventListener("click", function(e){
 
 /* ---------- postflop tree ---------- */
 var STREETS = [["flop","Flop",""],["turn","Turn",""],["river","River",""]];
+var POTS = [["hu","Heads-up","2 players"],["mw","Multiway","3+ players"]];
+var MW_SUBS = { flop: [["strong","Strong draw (12+ outs)"],["draw","Flush draw / open-ender"],["weak","Weak showdown"],["air","Air"]], river: [["missed","Missed draw"],["weak","Weak showdown"],["air","Air"]] };
+MW_SUBS.turn = MW_SUBS.flop;
+var MW_KEYS = [["open","Betting first or checked to"],["vsBet","Facing a bet"],["vsRaise","Facing a raise"]];
 var ROLES = [["agg","Aggressor","You made the last bet"],["def","Defender","You called it"]];
 var POS = [["ip","In position","You act last"],["oop","Out of position","You act first"]];
 var treeEl = document.getElementById("tree"), glanceEl = document.getElementById("glance");
@@ -165,6 +169,7 @@ function labelOf(arr, v){ return arr.filter(function(a){ return a[0] === v; })[0
 function renderTree(){
   if (state.bucket === "nv") state.bucket = "nvv"; // older saved choice, before the nutted bucket was split
   var bk = BUCKETS.filter(function(b){ return b.id === state.bucket; })[0] || BUCKETS.filter(function(b){ return b.id === "gsv"; })[0];
+  if (state.pot === "mw") return renderMultiway(bk);
   var node = T[state.street][state.role][state.pos][bk.id];
   var path = [labelOf(STREETS,state.street), labelOf(ROLES,state.role), labelOf(POS,state.pos), bk.name].join(" › ");
   var body;
@@ -183,14 +188,15 @@ function renderTree(){
     return '<button class="chip" data-set="bucket" data-val="' + b.id + '" aria-pressed="' + (b.id === bk.id) + '">' + esc(b.name) + '<small class="alias">= ' + esc(b.play) + "</small></button>";
   }).join("") + "</div>";
   var tableNote = state.players >= 8
-    ? '<p class="streetnote">At ' + state.players + "-handed, more pots go multiway. When 3+ players see the flop, use the multiway rule in Buckets & rules.</p>"
+    ? '<p class="streetnote">At ' + state.players + "-handed, more pots go multiway. When 3+ players see the flop, switch to Multiway above.</p>"
     : "";
 
   treeEl.innerHTML =
     '<div class="lvl"><span class="k">1 · Street</span>' + chipRow("street", STREETS, state.street) + "</div>" +
-    '<div class="lvl"><span class="k">2 · Your role</span>' + chipRow("role", ROLES, state.role) + "</div>" +
-    '<div class="lvl"><span class="k">3 · Position</span>' + chipRow("pos", POS, state.pos) + "</div>" +
-    '<div class="lvl"><span class="k">4 · Hand bucket = bet type</span>' + bucketChips + '<p class="hint">' + (bk.badCards ? '<span class="cardcount">' + esc(bk.badCards) + " bad next cards</span> " : "") + esc(bk.def) + " e.g. " + cards(bk.ex[0]) + "</p></div>" +
+    '<div class="lvl"><span class="k">2 · Players in the pot</span>' + chipRow("pot", POTS, state.pot) + "</div>" +
+    '<div class="lvl"><span class="k">3 · Your role</span>' + chipRow("role", ROLES, state.role) + "</div>" +
+    '<div class="lvl"><span class="k">4 · Position</span>' + chipRow("pos", POS, state.pos) + "</div>" +
+    '<div class="lvl"><span class="k">5 · Hand bucket = bet type</span>' + bucketChips + '<p class="hint">' + (bk.badCards ? '<span class="cardcount">' + esc(bk.badCards) + " bad next cards</span> " : "") + esc(bk.def) + " e.g. " + cards(bk.ex[0]) + "</p></div>" +
     '<div class="lvl leafnode"><span class="k">Play</span>' +
       '<article class="leaf" aria-live="polite">' +
         '<div class="leaf-head"><div class="path">' + esc(path) + '</div><div class="aliasline">' + esc(bk.name) + " = " + esc(bk.play) + '</div><p class="ctx">' + esc(CTX[state.street][state.role][state.pos]) + "</p></div>" +
@@ -205,6 +211,39 @@ function renderTree(){
     var n = spot[b.id], a, s;
     if (n.bad){ a = actChip("mix","Split",true); s = "see split"; } else { a = actChip(n.k, n.act, true); s = n.size; }
     return '<button class="grow" data-set="bucket" data-val="' + b.id + '" aria-current="' + (b.id === bk.id) + '"><span class="bn">' + esc(b.name) + "<small>" + esc(n.bad ? b.play : n.term) + '</small></span><span class="ga">' + a + '<span class="gs">' + esc(s) + "</span></span></button>";
+  }).join("") + "</div>";
+}
+// Multiway: one answer per situation, whatever your role or position (the guide's MW section).
+function mwLine(label, L) {
+  return '<div class="sub"><div class="h">' + esc(label) + '</div><div class="a">' + actChip(L.k, L.act, true) + (L.size ? '<span class="size">' + esc(L.size) + "</span>" : "") + "</div>" +
+    '<div class="t">' + termTag(L.term) + (L.t ? "<span>" + esc(L.t) + "</span>" : "") + "</div></div>";
+}
+function renderMultiway(bk){
+  var node = PB.MW[state.street][bk.id], body;
+  if (bk.id === "bad") {
+    body = MW_SUBS[state.street].map(function (sub) {
+      var set = node[sub[0]];
+      return '<div class="mw-sub"><div class="mw-h">' + esc(sub[1]) + '</div><div class="subs">' + MW_KEYS.map(function (k) { return mwLine(k[1], set[k[0]]); }).join("") + "</div></div>";
+    }).join("");
+  } else body = '<div class="subs">' + MW_KEYS.map(function (k) { return mwLine(k[1], node[k[0]]); }).join("") + "</div>";
+  var bucketChips = '<div class="bucket-chips" role="group" aria-label="Hand bucket">' + BUCKETS.map(function(b){
+    return '<button class="chip" data-set="bucket" data-val="' + b.id + '" aria-pressed="' + (b.id === bk.id) + '">' + esc(b.name) + '<small class="alias">= ' + esc(b.play) + "</small></button>";
+  }).join("") + "</div>";
+  treeEl.innerHTML =
+    '<div class="lvl"><span class="k">1 · Street</span>' + chipRow("street", STREETS, state.street) + "</div>" +
+    '<div class="lvl"><span class="k">2 · Players in the pot</span>' + chipRow("pot", POTS, state.pot) + '<p class="hint">In a multiway pot the same rules apply whatever your role or position.</p></div>' +
+    '<div class="lvl"><span class="k">3 · Hand bucket = bet type</span>' + bucketChips + '<p class="hint">' + (bk.badCards ? '<span class="cardcount">' + esc(bk.badCards) + " bad next cards</span> " : "") + esc(bk.def) + " e.g. " + cards(bk.ex[0]) + "</p></div>" +
+    '<div class="lvl leafnode"><span class="k">Play</span>' +
+      '<article class="leaf" aria-live="polite">' +
+        '<div class="leaf-head"><div class="path">' + esc(labelOf(STREETS, state.street) + " › Multiway › " + bk.name) + '</div><div class="aliasline">' + esc(bk.name) + " = " + esc(bk.play) +
+        '</div><p class="ctx">Three or more players see the ' + state.street + ". Someone usually has something, so bet good hands bigger and almost never bluff.</p></div>" +
+        body + '<p class="why"><b>Why</b>' + esc(node.why) + "</p>" +
+      "</article>" +
+    "</div>";
+  glanceEl.innerHTML = '<div class="k">Multiway, every bucket: betting first or checked to</div><div class="glance-list">' + BUCKETS.map(function(b){
+    var n = PB.MW[state.street][b.id], a, sz;
+    if (b.id === "bad") { a = actChip("check", "Check", true); sz = "no bluffs"; } else { a = actChip(n.open.k, n.open.act, true); sz = n.open.size; }
+    return '<button class="grow" data-set="bucket" data-val="' + b.id + '" aria-current="' + (b.id === bk.id) + '"><span class="bn">' + esc(b.name) + "<small>" + esc(b.id === "bad" ? "Check, give up or take a free card" : n.open.term) + '</small></span><span class="ga">' + a + '<span class="gs">' + esc(sz) + "</span></span></button>";
   }).join("") + "</div>";
 }
 function onTreeClick(e){

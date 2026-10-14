@@ -118,7 +118,7 @@ function describe(info, hole, board) {
       var kick = h1 === info.pairRank ? h2 : h1;
       return cap(info.kind) + " (" + P[info.pairRank] + "), " + R[kick] + " kicker";
     case 2: return cap(info.kind) + ", " + P[a] + " and " + P[b];
-    case 3: return info.kind === "set" ? "Set of " + P[a] : "Trip " + P[a];
+    case 3: return info.kind === "set" ? "Set of " + P[a] : "Trips, " + P[a];
     default: return K.handName(info.score);
   }
 }
@@ -241,11 +241,50 @@ function explain(an) {
   return parts.join(" ");
 }
 
+/* ---------- fast hand classes, for opponents and ranges ----------
+   The exact bucket above checks every possible opponent hand, which is too slow to run for every hand in a range.
+   quickClass gives the same seven classes the opponent model plays by, using one sorted table per board:
+   nut, good, goodv (good but vulnerable), strong (12+ outs), draw (8+), weak (a pair or ace high), air. */
+function rankTable(board) {
+  var rest = unseen(board), buf = [0, 0].concat(board), out = [];
+  for (var i = 0; i < rest.length; i++) for (var j = i + 1; j < rest.length; j++) { buf[0] = rest[i]; buf[1] = rest[j]; out.push(evaluate(buf)); }
+  return Int32Array.from(out).sort();
+}
+function shareAbove(table, score) { // share of all two-card hands that beat `score`
+  var lo = 0, hi = table.length;
+  while (lo < hi) { var mid = (lo + hi) >> 1; if (table[mid] <= score) lo = mid + 1; else hi = mid; }
+  return (table.length - lo) / table.length;
+}
+function wetBoard(board) {
+  var suits = [0, 0, 0, 0], close = 0, i, j;
+  board.forEach(function (c) { suits[c & 3]++; });
+  for (i = 0; i < board.length; i++) for (j = i + 1; j < board.length; j++) {
+    var d = Math.abs((board[i] >> 2) - (board[j] >> 2)); if (d > 0 && d <= 3) close++;
+  }
+  return Math.max.apply(null, suits) >= (board.length === 3 ? 2 : 3) || close >= 2;
+}
+function quickClass(hole, board, table) {
+  var info = made(hole, board), share = shareAbove(table, info.score);
+  if (info.eff >= 2 && share <= NUT_MAX_BEATEN) return "nut";
+  if ((topPairPlus(info) && share <= GOOD_MAX_BEATEN) || (info.eff >= 1 && share <= STRONG_PAIR_MAX_BEATEN)) return board.length < 5 && wetBoard(board) ? "goodv" : "good";
+  if (board.length < 5) {
+    var d = drawsOf(hole, board), outs = (d.flush ? 9 : 0) + (d.straightRanks >= 2 ? 8 : d.straightRanks === 1 ? 4 : 0);
+    if (d.flush && d.straightRanks) outs -= 2;
+    var top = Math.max.apply(null, board.map(function (c) { return c >> 2; }));
+    if (info.eff === 0 && (hole[0] >> 2) > top && (hole[1] >> 2) > top) outs += 6;
+    if (outs >= 12) return "strong";
+    if (outs >= 8) return "draw";
+  }
+  return info.eff >= 1 || hasAce(hole) ? "weak" : "air";
+}
+var CLASS_NAME = { nut: "Nutted", good: "Good", goodv: "Good, vulnerable", strong: "Strong draw", draw: "Draw", weak: "Weak pair or ace high", air: "Nothing" };
+
 var api = {
   NUT_MAX_BEATEN: NUT_MAX_BEATEN, GOOD_MAX_BEATEN: GOOD_MAX_BEATEN, BUCKET_NAME: BUCKET_NAME, SUB_NAME: SUB_NAME,
   bucketLabel: bucketLabel, unseen: unseen, made: made, describe: describe, drawsOf: drawsOf, countBeaters: countBeaters,
   worstDraw: worstDraw, improvingCards: improvingCards, straightCombos: straightCombos, scare: scare,
-  analyze: analyze, explain: explain, pct: pct
+  analyze: analyze, explain: explain, pct: pct,
+  rankTable: rankTable, shareAbove: shareAbove, quickClass: quickClass, wetBoard: wetBoard, CLASS_NAME: CLASS_NAME
 };
 root.PB = Object.assign(root.PB || {}, api);
 if (typeof module !== "undefined" && module.exports) module.exports = api;
