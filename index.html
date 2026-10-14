@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Low-Stakes Poker Playbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="rail">
+  <div class="wrap">
+    <div class="eyebrow" id="eyebrow">6-handed · 100bb cash · NL2–NL50</div>
+    <h1>Low-Stakes Playbook</h1>
+    <p class="lede">Built to exploit a loose, passive player pool: value-heavy raises, bigger value bets, fewer bluffs, and fast folds to big raises.</p>
+    <div class="table-size">
+      <span class="k" id="playersLabel">Players at the table</span>
+      <div class="chips" id="players" role="group" aria-labelledby="playersLabel"></div>
+      <div class="seatlist" id="seatList"></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="tab-preflop" aria-controls="panel-preflop" data-tab="preflop">Preflop ranges</button>
+      <button class="tab" role="tab" id="tab-postflop" aria-controls="panel-postflop" data-tab="postflop">Postflop tree</button>
+      <button class="tab" role="tab" id="tab-practice" aria-controls="panel-practice" data-tab="practice">Practice</button>
+      <button class="tab" role="tab" id="tab-rules" aria-controls="panel-rules" data-tab="rules">Buckets &amp; rules</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <!-- PREFLOP -->
+    <section role="tabpanel" id="panel-preflop" aria-labelledby="tab-preflop">
+      <div class="block">
+        <h2>Preflop</h2>
+        <p class="muted" style="max-width:66ch">Opening, 3-bet, 4-bet and 5-bet ranges for every seat. They change with the number of players you set above. If you have your own opening chart, use it instead of the Open view. Sizes assume a 2.5bb open (3bb from the SB).</p>
+        <div class="seg" id="preSeg" role="group" aria-label="Preflop decision">
+          <button data-pre="open">Open</button>
+          <button data-pre="3bet">3-bet</button>
+          <button data-pre="4bet">4-bet</button>
+          <button data-pre="5bet">5-bet</button>
+          <button data-pre="sizes">All sizes</button>
+        </div>
+      </div>
+      <div id="preBody" class="block"></div>
+    </section>
+
+    <!-- POSTFLOP -->
+    <section role="tabpanel" id="panel-postflop" aria-labelledby="tab-postflop" hidden>
+      <div class="block">
+        <h2>Postflop tree</h2>
+        <p class="muted" style="max-width:66ch">Pick the street, your role, your position and your hand bucket. Each bucket has a bet-type name (value bet, protection bet, semi-bluff…) that means the same thing. Sizes are % of the current pot, heads-up in a single-raised pot.</p>
+      </div>
+      <div class="tree" id="tree"></div>
+      <div class="glance" id="glance"></div>
+    </section>
+
+    <!-- PRACTICE -->
+    <section role="tabpanel" id="panel-practice" aria-labelledby="tab-practice" hidden>
+      <div class="block">
+        <h2>Practice</h2>
+        <p class="muted" style="max-width:66ch">Random hands at the table size you set above, from any seat. Make every decision yourself. The judge reads your hand the way this guide does, finds your bucket, and checks your choice against the charts. Bet sizes are approximate. Every hand is saved: History lists them, and Retrospect analyzes your strengths, weaknesses and leaks.</p>
+      </div>
+      <div id="practice"></div>
+    </section>
+
+    <!-- RULES -->
+    <section role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" hidden>
+      <div class="block">
+        <h2>Hand buckets</h2>
+        <p class="muted" style="max-width:66ch">Pick the vulnerability by counting the next cards that could beat you or kill your action: 0–4 is non-vulnerable (a gutshot at most), 5–9 slightly (one real draw), 10 or more very. Re-bucket on every street. A set of 7s on <span class="card">Q♠9♠<span class="red">7♦</span></span> is Nutted · very vulnerable on the flop and drops to Good · very vulnerable when the <span class="card">8♠</span> hits.</p>
+        <div class="buckets" id="bucketDefs"></div>
+      </div>
+      <div class="block">
+        <h2>Bet types</h2>
+        <p class="muted" style="max-width:66ch">The names used for each action in the postflop tree.</p>
+        <div class="tablewrap">
+          <table class="terms">
+            <thead><tr><th>Term</th><th>What it means</th><th>Where you'll use it</th></tr></thead>
+            <tbody id="termsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="block">
+        <h2>Adjust the sizes</h2>
+        <div class="rules" id="adjust"></div>
+      </div>
+      <div class="block">
+        <h2>Pot-odds cheat sheet</h2>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Bet size</th><th>Caller needs equity</th><th>Bluff must work</th><th>Use it for</th></tr></thead>
+            <tbody id="oddsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="block">
+        <h2>Outs</h2>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Draw</th><th>Outs</th><th>Next card</th><th>By river (from flop)</th></tr></thead>
+            <tbody id="outsBody"></tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:13.5px">Quick rule: outs × 2 for one card, outs × 4 for two cards. Call a draw when the next-card % is at least the equity the bet asks for, or close to it when they will pay you off after you hit.</p>
+      </div>
+      <footer>Ranges and sizes are an exploitative baseline for typical online low-stakes pools, not solver output. Tighten vs nits, loosen vs players who fold too much.</footer>
+    </section>
+  </div>
+</main>
+
+<script src="js/ranges.js"></script>
+<script src="js/table.js"></script>
+<script src="js/data.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/coach.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/store.js"></script>
+<script src="js/retro.js"></script>
+<script src="js/app.js"></script>
+<script src="js/trainer.js"></script>
+</body>
+</html>
